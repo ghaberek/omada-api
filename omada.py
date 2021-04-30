@@ -14,6 +14,9 @@ class Omada:
 
 	def __init__(self, config, baseurl=None, site='Default', verify=True):
 		
+		username = None
+		password = None
+		
 		if config is not None:
 			parser = ConfigParser()
 			parser.read( config )
