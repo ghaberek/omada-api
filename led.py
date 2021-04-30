@@ -15,9 +15,9 @@ def main():
 	
 	if len(sys.argv) > 1:
 		settings['led']['enable'] = (sys.argv[1] == 'on')
-		if not omada.setSiteSettings(site, settings):
+		if not omada.setSiteSettings(settings):
 			return
-		settings = omada.getSiteSettings(site)
+		settings = omada.getSiteSettings()
 	
 	print( 'led: on' if settings['led']['enable'] else 'led: off' )
 	
