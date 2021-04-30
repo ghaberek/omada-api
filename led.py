@@ -8,15 +8,14 @@ def main():
 		print( f"usage: {sys.argv[0]} [on|off]" )
 		return
 	
-	omada = Omada('omada.cfg')
+	omada = Omada()
 	omada.login()
 	
 	settings = omada.getSiteSettings()
 	
 	if len(sys.argv) > 1:
 		settings['led']['enable'] = (sys.argv[1] == 'on')
-		if not omada.setSiteSettings(settings):
-			return
+		omada.setSiteSettings(settings)
 		settings = omada.getSiteSettings()
 	
 	print( 'led: on' if settings['led']['enable'] else 'led: off' )

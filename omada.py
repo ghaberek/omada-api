@@ -1,122 +1,306 @@
 # -*- coding: future_fstrings -*-
 
+import os
+import requests
 import urllib3
 import warnings
 from configparser import ConfigParser
 from datetime import datetime
-from requests import Session
 
+##
+## Omada API calls expect a timestamp in milliseconds.
+##
 def timestamp():
 	return int( datetime.utcnow().timestamp() * 1000 )
 
+##
+## Display errorCode and optional message returned from Omada API.
+##
+class OmadaError(Exception):
+
+	def __init__(self, json):
+		self.errorCode = 0
+		self.msg = None
+		
+		if json is None:
+			raise TypeError('json cannot be None')
+		
+		if 'errorCode' in json:
+			self.errorCode = json['errorCode']
+		
+		if 'msg' in json:
+			self.msg = '"' + json['msg'] + '"'
+
+	def __str__(self):
+		return f"errorCode={self.errorCode}, msg={self.msg}"
+
+##
+## The main Omada API class.
+##
 class Omada:
 
-	def __init__(self, config, baseurl=None, site='Default', verify=True):
+	##
+	## Initialize a new Omada API instance.
+	##
+	def __init__(self, config='omada.cfg', baseurl=None, site='Default', verify=True, warnings=True):
 		
-		username = None
-		password = None
+		self.config = None
+		self.token  = None
 		
-		if config is not None:
-			parser = ConfigParser()
-			parser.read( config )
-			if 'omada' in parser:
-				baseurl  = parser['omada'].get('baseurl')
-				verify   = parser['omada'].getboolean('verify')
-				site     = parser['omada'].get('site')
-				username = parser['omada'].get('username')
-				password = parser['omada'].get('password')
+		if baseurl is not None:
+			# use the provided configuration
+			self.baseurl  = baseurl
+			self.site     = site
+			self.verify   = verify
+			self.warnings = warnings
+		elif os.path.isfile( config ):
+			# read from configuration file
+			self.config = ConfigParser()
+			try:
+				self.config.read( config )
+				self.baseurl  = self.config['omada'].get('baseurl')
+				self.site     = self.config['omada'].get('site', 'Default')
+				self.verify   = self.config['omada'].getboolean('verify', True)
+				self.warnings = self.config['omada'].getboolean('warnings', True)
+			except:
+				raise
+		else:
+			# could not find configuration
+			raise FileNotFoundError(config)
 		
-		if verify == False:
+		# create a new session to hold cookies
+		self.session = requests.Session()
+		self.session.verify = self.verify
+		
+		# hide warnings about insecure SSL requests
+		if self.verify == False and self.warnings == False:
 			urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-		
-		session = Session()
-		session.verify = verify
-		
-		self.baseurl = baseurl
-		self.site = site
-		self.username = username
-		self.password = password
-		self.session = session
-		self.token = None
 
+	##
+	## Current API path.
+	##
+	ApiPath = '/api/v2'
+
+	##
+	## Build a URL for the provided path.
+	##
+	def url_for(self, path):
+		return self.baseurl + Omada.ApiPath + path
+
+	##
+	## Perform a GET request and return the result.
+	##
+	def get(self, path, params=None, data=None, json=None):
+		
+		if params is None and self.token is not None:
+			params = {'token':self.token,'_':timestamp()}
+		
+		response = self.session.get( self.url_for(path), params=params, data=data, json=json )
+		response.raise_for_status()
+		
+		json = response.json()
+		if json['errorCode'] == 0:
+			return json['result'] if 'result' in json else None
+		
+		raise OmadaError(json)
+
+	##
+	## Perform a POST request and return the result.
+	##
+	def post(self, path, params=None, data=None, json=None):
+		
+		if params is None and self.token is not None:
+			params = {'token':self.token,'_':timestamp()}
+		
+		response = self.session.post( self.url_for(path), params=params, data=data, json=json )
+		response.raise_for_status()
+		
+		json = response.json()
+		if json['errorCode'] == 0:
+			return json['result'] if 'result' in json else None
+		
+		raise OmadaError(json)
+
+	##
+	## Perform a PATCH request and return the result.
+	##
+	def patch(self, path, params=None, data=None, json=None):
+		
+		if params is None and self.token is not None:
+			params = {'token':self.token,'_':timestamp()}
+		
+		response = self.session.patch( self.url_for(path), params=params, data=data, json=json )
+		response.raise_for_status()
+		
+		json = response.json()
+		if json['errorCode'] == 0:
+			return json['result'] if 'result' in json else None
+		
+		raise OmadaError(json)
+
+	##
+	## Log in with the provided credentials and return the result.
+	##
 	def login(self, username=None, password=None):
-		if username is None: username = self.username
-		if password is None: password = self.password
 		
-		response = self.session.post( f'{self.baseurl}/api/v2/login', json={'username':username,'password':password} )
-		json = response.json()
+		if username is None and password is None:
+			if self.config is None:
+				raise TypeError('username and password cannot be None')
+			try:
+				username = self.config['omada'].get('username')
+				password = self.config['omada'].get('password')
+			except:
+				raise
 		
-		if json['errorCode'] == 0:
-			self.username = username
-			self.password = password
-			self.token = json['result']['token']
-			return True
-		
-		return None
+		result = self.post( '/login', json={'username':username,'password':password} )
+		self.token = result['token']
+		return result
 
+	##
+	## Log out of the current session. Return value is always None.
+	##
 	def logout(self):
-		response = self.session.post( f'{self.baseurl}/api/v2/logout', params={'token':self.token} )
-		json = response.json()
-		
-		if json['errorCode'] == 0:
-			self.token = None
-			return True
-		
-		return None
+		return self.post( '/logout' )
 
+	##
+	## Returns the current login status.
+	##
 	def getLoginStatus(self):
-		response = self.session.get( f'{self.baseurl}/api/v2/loginStatus', params={'token':self.token,'_':timestamp()} )
-		json = response.json()
-		
-		if json['errorCode'] == 0:
-			return json['result']['login']
-		
-		return None
+		return self.get( '/loginStatus' )
 
+	##
+	## Returns the current user information.
+	##
 	def getCurrentUser(self):
-		response = self.session.get( f'{self.baseurl}/api/v2/users/current', params={'token':self.token,'_':timestamp()} )
-		json = response.json()
-		
-		if json['errorCode'] == 0:
-			return json['result']['id']
-		
-		return None
+		return self.get( '/users/current' )
 
-	def getCurrentSite(self):
-		response = self.session.get( f'{self.baseurl}/api/v2/users/current', params={'token':self.token,'_':timestamp()} )
-		json = response.json()
-		
-		if json['errorCode'] == 0:
-			return json['result']['privilege']['lastVisited']
-		
-		return None
+		## Group Types
+	IPGroup   = 0 # "IP Group"
+	PortGroup = 1 # "IP-Port Group"
+	MACGroup  = 2 # "MAC Group"
 
+	##
+	## Returns the list of groups for the given site.
+	##
+	def getSiteGroups(self, site=None, type=None):
+		
+		if site is None:
+			site = self.site
+		
+		if type is None:
+			result = self.get( f'/sites/{site}/setting/profiles/groups' )
+		else:
+			result = self.get( f'/sites/{site}/setting/profiles/groups/{type}' )
+		
+		return result['data']
+
+	##
+	## Returns the list of portal candidates for the given site.
+	##
+	## This is the "SSID & Network" list on Settings > Authentication > Portal > Basic Info.
+	##
+	def getPortalCandidates(self, site=None):
+		
+		if site is None:
+			site = self.site
+		
+		return self.get( f'/sites/{site}/setting/portal/candidates' )
+
+	##
+	## Returns the list of RADIUS profiles for the given site.
+	##
+	def getRadiusProfiles(self, site=None):
+		
+		if site is None:
+			site = self.site
+		
+		return self.get( f'/sites/{site}/setting/radiusProfiles' )
+
+	##
+	## Returns the list of scenarios.
+	##
+	def getScenarios(self):
+		return self.get( '/scenarios' )
+
+	##
+	## Returns the list of devices for given site.
+	##
+	def getSiteDevices(self, site=None):
+		
+		if site is None:
+			site = self.site
+		
+		return self.get( f'/sites/{site}/devices' )
+
+	##
+	## Returns the list of settings for the given site.
+	##
 	def getSiteSettings(self, site=None):
-		if site is None: site = self.site
 		
-		response = self.session.get( f'{self.baseurl}/api/v2/sites/{site}/setting', params={'token':self.token,'_':timestamp()} )
-		json = response.json()
+		if site is None:
+			site = self.site
 		
-		if json['errorCode'] == 0:
-			# work-around for error when sending PATCH for site settings (see below)
-			if 'beaconControl' in json['result']: del json['result']['beaconControl']
-			return json['result']
+		result = self.get( f'/sites/{site}/setting' )
 		
-		return None
+		# work-around for error when sending PATCH for site settings (see below)
+		if 'beaconControl' in result:
+			if self.warnings:
+				warnings.warn( "settings['beaconControl'] was removed as it causes an error", stacklevel=2 )
+			del result['beaconControl']
+		
+		return result
 
+	##
+	## Push back the settings for the site.
+	##
 	def setSiteSettings(self, settings, site=None):
-		if site is None: site = self.site
+		
+		if site is None:
+			site = self.site
 		
 		# not sure why but setting 'beaconControl' here does not work, returns {'errorCode': -1001}
 		if 'beaconControl' in settings:
-			warnings.warn( "settings['beaconControl'] was removed as it causes an error", stacklevel=2 )
+			if self.warnings:
+				warnings.warn( "settings['beaconControl'] was removed as it causes an error", stacklevel=2 )
 			del settings['beaconControl']
 		
-		response = self.session.patch( f'{self.baseurl}/api/v2/sites/{site}/setting', params={'token':self.token}, json=settings )
-		json = response.json()
+		return self.patch( f'/sites/{site}/setting', json=settings )
+
+	##
+	## Returns the list of timerange profiles for the given site.
+	##
+	def getTimeRanges(self, site=None):
 		
-		if json['errorCode'] == 0:
-			return True
+		if site is None:
+			site = self.site
 		
-		return None
+		return self.get( f'/sites/{site}/setting/profiles/timeranges' )
+
+	##
+	## Returns the list of wireless network groups.
+	##
+	## This is the "WLAN Group" list on Settings > Wireless Networks.
+	##
+	def getWirelessGroups(self, site=None):
+		
+		if site is None:
+			site = self.site
+		
+		result = self.get( f'/sites/{site}/setting/wlans' )
+		
+		return result['data']
+
+	##
+	## Returns the list of wireless networks for the given group.
+	##
+	## This is the main SSID list on Settings > Wireless Networks.
+	##
+	def getWirelessNetworks(self, group, site=None):
+		
+		if site is None:
+			site = self.site
+		
+		result = self.get( f'/sites/{site}/setting/wlans/{group}/ssids' )
+		
+		return result['data']
 
