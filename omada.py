@@ -1,6 +1,5 @@
 # -*- coding: future_fstrings -*-
 
-import json
 import urllib3
 import warnings
 from configparser import ConfigParser
