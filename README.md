@@ -2,13 +2,11 @@
 
 A simple Python wrapper for the [TP-Link Omada Software Controller](https://www.tp-link.com/us/support/download/omada-software-controller/) API.
 
+[![Test Python versions](https://github.com/ghaberek/omada-api/actions/workflows/versions.yml/badge.svg)](https://github.com/ghaberek/omada-api/actions/workflows/versions.yml)
+
 ## Usage
 
 Currently this is just the bare-minimum required to log in, get site settings, push site settings, and log out.
-
-I use [led.py](led.py) in a cron schedule to turn my site LED setting off at night and back on in the morning.
-
-### Example
 
 ```
 from omada import Omada
@@ -37,6 +35,38 @@ omada.setSiteSettings(settings)
 # log out of the controller
 omada.logout()
 ```
+
+## Examples
+
+### [led.py](led.py)
+
+I use this in a cron schedule to turn my site LED setting off at night and back on in the morning.
+
+Turn the LED on:
+
+```
+$ python led.py on
+led: on
+```
+Turn the LED off:
+
+```
+$ python led.py off
+led: off
+```
+
+### [clients.py](clients.py)
+
+This is a simple app that will display similar output to the "Clients" page on the web interface.
+
+```
+$ python clients.py
+USERNAME            IP ADDRESS      STATUS
+00-11-22-33-44-55   192.168.1.123   CONNECTED
+...
+```
+
+Make sure you have your [Settings](#Settings) file configured correctly for this to work.
 
 ## Settings
 
