@@ -231,6 +231,14 @@ class Omada:
 			site = self.site
 		
 		return self.get( f'/sites/{site}/devices' )
+	
+	##
+	## Returns the list of active Clients for given site.
+	##
+	def getSiteClients(self, site=None):
+	if site is None:
+		site = self.site
+	return self.get( f'/sites/{site}/clients?currentPageSize=999&currentPage=1&filters.active=true')
 
 	##
 	## Returns the list of settings for the given site.
