@@ -1,19 +1,19 @@
 # -*- coding: future_fstrings -*-
 
-import sys
+import sys, collections
 from omada import Omada
 
-FIELDDEF = {
-	'name':        ('USERNAME',   20),
-	'ip':          ('IP ADDRESS', 16),
-	'active':      ('STATUS',     12),
-	'networkName': ('NETWORK',    12),
-	'port':        ('PORT',       16),
-	'activity':    ('ACTIVITY',   12),
-	'trafficDown': ('DOWNLOAD',   10),
-	'trafficUp':   ('UPLOAD',     10),
-	'uptime':      ('UPTIME',     16),
-}
+FIELDDEF = collections.OrderedDict([
+	('name',        ('USERNAME',   20)),
+	('ip',          ('IP ADDRESS', 16)),
+	('active',      ('STATUS',     12)),
+	('networkName', ('NETWORK',    12)),
+	('port',        ('PORT',       16)),
+	('activity',    ('ACTIVITY',   12)),
+	('trafficDown', ('DOWNLOAD',   10)),
+	('trafficUp',   ('UPLOAD',     10)),
+	('uptime',      ('UPTIME',     16)),
+])
 
 def format_status( active ):
 	return 'CONNECTED' if active else '--'
