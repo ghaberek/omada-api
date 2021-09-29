@@ -46,6 +46,7 @@ class Omada:
 		
 		self.config = None
 		self.token  = None
+		self.currentPageSize = 10
 		
 		if baseurl is not None:
 			# use the provided configuration
@@ -88,12 +89,46 @@ class Omada:
 		return self.baseurl + Omada.ApiPath + path
 
 	##
+	## Return True if a result contains data.
+	##
+	def hasData(self, result):
+		return (result is not None) and ('data' in result) and (len(result['data']) > 0)
+
+	##
+	## Returns the next page of data if more is available.
+	##
+	def nextPage(self, result):
+		
+		if 'path' not in result:
+			return None
+		
+		path = result['path']
+		del result['path']
+		
+		if 'params' not in result:
+			return None
+		
+		params = result['params']
+		del result['params']
+		
+		totalRows   = int( result['totalRows'] )
+		currentPage = int( result['currentPage'] )
+		currentSize = int( result['currentSize'] )
+		dataLength  = len( result['data'] )
+		
+		if dataLength + (currentPage-1)*currentSize >= totalRows:
+			return None
+		
+		params['currentPage'] = currentPage + 1
+		return self.get_paged( path, params )
+
+	##
 	## Perform a GET request and return the result.
 	##
-	def get(self, path, params=None, data=None, json=None):
+	def get(self, path, params={}, data=None, json=None):
 		
-		if params is None and self.token is not None:
-			params = {'token':self.token,'_':timestamp()}
+		params['_'] = timestamp()
+		params['token'] = self.token
 		
 		response = self.session.get( self.url_for(path), params=params, data=data, json=json )
 		response.raise_for_status()
@@ -105,12 +140,37 @@ class Omada:
 		raise OmadaError(json)
 
 	##
+	## Perform a paged GET request and return the result.
+	##
+	def get_paged(self, path, params={}, data=None, json=None):
+		
+		params['_'] = timestamp()
+		params['token'] = self.token
+		
+		if 'currentPage' not in params:
+			params['currentPage'] = 1
+		
+		if 'currentPageSize' not in params:
+			params['currentPageSize'] = self.currentPageSize
+		
+		response = self.session.get( self.url_for(path), params=params, data=data, json=json )
+		response.raise_for_status()
+		
+		json = response.json()
+		if json['errorCode'] == 0:
+			json['result']['path'] = path
+			json['result']['params'] = params
+			return json['result'] if 'result' in json else None
+		
+		raise OmadaError(json)
+
+	##
 	## Perform a POST request and return the result.
 	##
-	def post(self, path, params=None, data=None, json=None):
+	def post(self, path, params={}, data=None, json=None):
 		
-		if params is None and self.token is not None:
-			params = {'token':self.token,'_':timestamp()}
+		params['_'] = timestamp()
+		params['token'] = self.token
 		
 		response = self.session.post( self.url_for(path), params=params, data=data, json=json )
 		response.raise_for_status()
@@ -124,10 +184,10 @@ class Omada:
 	##
 	## Perform a PATCH request and return the result.
 	##
-	def patch(self, path, params=None, data=None, json=None):
+	def patch(self, path, params={}, data=None, json=None):
 		
-		if params is None and self.token is not None:
-			params = {'token':self.token,'_':timestamp()}
+		params['_'] = timestamp()
+		params['token'] = self.token
 		
 		response = self.session.patch( self.url_for(path), params=params, data=data, json=json )
 		response.raise_for_status()
@@ -231,14 +291,16 @@ class Omada:
 			site = self.site
 		
 		return self.get( f'/sites/{site}/devices' )
-	
+
 	##
-	## Returns the list of active Clients for given site.
+	## Returns the list of active clients for given site.
 	##
 	def getSiteClients(self, site=None):
-	if site is None:
-		site = self.site
-	return self.get( f'/sites/{site}/clients?currentPageSize=999&currentPage=1&filters.active=true')
+		
+		if site is None:
+			site = self.site
+		
+		return self.get_paged( f'/sites/{site}/clients', params={'filters.active':'true'} )
 
 	##
 	## Returns the list of settings for the given site.
