@@ -55,9 +55,9 @@ $ python led.py off
 led: off
 ```
 
-### [clients.py](clients.py)
+### [clients.py](clients.py), [devices.py](devices.py)
 
-This is a simple app that will display similar output to the "Clients" page on the web interface.
+These are simple apps to display similar output to the "Clients" and "Devices" page on the web interface.
 
 ```
 $ python clients.py
@@ -66,7 +66,7 @@ USERNAME            IP ADDRESS      STATUS
 ...
 ```
 
-Make sure you have your [Settings](#Settings) file configured correctly for this to work.
+Make sure you have your [Settings](#Settings) file configured correctly for these to work.
 
 ## Settings
 
