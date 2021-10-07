@@ -18,4 +18,4 @@ jobs:
           pip install -r requirements.txt
       - name: Test Python code
         run: |
-          python -m py_compile omada.py
+          python -m compileall omada/
