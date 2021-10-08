@@ -30,8 +30,8 @@ setuptools.setup(
 	},
 	packages=find_packages(),
 	install_requires=[
-		'future-fstrings',
-		'requests'
+		'future-fstrings>=1.2.0',
+		'requests>=2.22.0'
 	],
 	python_requires='>=3.5',
 )
