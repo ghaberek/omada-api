@@ -4,6 +4,8 @@ import os
 import requests
 import urllib3
 import warnings
+import http.client
+import logging
 from configparser import ConfigParser
 from datetime import datetime
 
@@ -42,11 +44,12 @@ class Omada:
 	##
 	## Initialize a new Omada API instance.
 	##
-	def __init__(self, config='omada.cfg', baseurl=None, site='Default', verify=True, warnings=True):
+	def __init__(self, config='omada.cfg', baseurl=None, site='Default', verify=True, warnings=True, verbose=False):
 		
 		self.config = None
 		self.token  = None
 		self.currentPageSize = 10
+		self.currentUser = {}
 		
 		if baseurl is not None:
 			# use the provided configuration
@@ -54,6 +57,7 @@ class Omada:
 			self.site     = site
 			self.verify   = verify
 			self.warnings = warnings
+			self.verbose  = verbose
 		elif os.path.isfile( config ):
 			# read from configuration file
 			self.config = ConfigParser()
@@ -63,6 +67,7 @@ class Omada:
 				self.site     = self.config['omada'].get('site', 'Default')
 				self.verify   = self.config['omada'].getboolean('verify', True)
 				self.warnings = self.config['omada'].getboolean('warnings', True)
+				self.verbose  = self.config['omada'].getboolean('verbose', False)
 			except:
 				raise
 		else:
@@ -76,6 +81,18 @@ class Omada:
 		# hide warnings about insecure SSL requests
 		if self.verify == False and self.warnings == False:
 			urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+		
+		# enable verbose output
+		if self.verbose:
+			# set debug level in http.client
+			http.client.HTTPConnection.debuglevel = 1
+			# initialize logger
+			logging.basicConfig()
+			logging.getLogger().setLevel(logging.DEBUG)
+			# configure logging for requests
+			logger = logging.getLogger('requests.packages.urllib3')
+			logger.setLevel(logging.DEBUG)
+			logger.propagate = True
 
 	##
 	## Current API path.
@@ -87,6 +104,16 @@ class Omada:
 	##
 	def url_for(self, path):
 		return self.baseurl + Omada.ApiPath + path
+
+	##
+	## Look up a site key given the name.
+	##
+	def site_key(self, name):
+		if name is None:
+			name = self.site
+		for site in self.currentUser['privilege']['sites']:
+			if site['name'] == name: return site['key']
+		return name
 
 	##
 	## Return True if a result contains data.
@@ -214,6 +241,7 @@ class Omada:
 		
 		result = self.post( '/login', json={'username':username,'password':password} )
 		self.token = result['token']
+		self.currentUser = self.getCurrentUser()
 		return result
 
 	##
@@ -244,15 +272,14 @@ class Omada:
 	##
 	def getSiteGroups(self, site=None, type=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
 		if type is None:
 			result = self.get( f'/sites/{site}/setting/profiles/groups' )
 		else:
 			result = self.get( f'/sites/{site}/setting/profiles/groups/{type}' )
 		
-		return result['data']
+		return result
 
 	##
 	## Returns the list of portal candidates for the given site.
@@ -261,8 +288,7 @@ class Omada:
 	##
 	def getPortalCandidates(self, site=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
 		return self.get( f'/sites/{site}/setting/portal/candidates' )
 
@@ -271,8 +297,7 @@ class Omada:
 	##
 	def getRadiusProfiles(self, site=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
 		return self.get( f'/sites/{site}/setting/radiusProfiles' )
 
@@ -283,12 +308,17 @@ class Omada:
 		return self.get( '/scenarios' )
 
 	##
+	## Returns the list of all sites.
+	##
+	def getSites(self):
+		return self.get_paged( f'/sites' )
+
+	##
 	## Returns the list of devices for given site.
 	##
 	def getSiteDevices(self, site=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
 		return self.get( f'/sites/{site}/devices' )
 
@@ -297,8 +327,7 @@ class Omada:
 	##
 	def getSiteClients(self, site=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
 		return self.get_paged( f'/sites/{site}/clients', params={'filters.active':'true'} )
 
@@ -307,8 +336,7 @@ class Omada:
 	##
 	def getSiteSettings(self, site=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
 		result = self.get( f'/sites/{site}/setting' )
 		
@@ -325,8 +353,7 @@ class Omada:
 	##
 	def setSiteSettings(self, settings, site=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
 		# not sure why but setting 'beaconControl' here does not work, returns {'errorCode': -1001}
 		if 'beaconControl' in settings:
@@ -341,8 +368,7 @@ class Omada:
 	##
 	def getTimeRanges(self, site=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
 		return self.get( f'/sites/{site}/setting/profiles/timeranges' )
 
@@ -353,12 +379,9 @@ class Omada:
 	##
 	def getWirelessGroups(self, site=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
-		result = self.get( f'/sites/{site}/setting/wlans' )
-		
-		return result['data']
+		return self.get( f'/sites/{site}/setting/wlans' )
 
 	##
 	## Returns the list of wireless networks for the given group.
@@ -367,10 +390,7 @@ class Omada:
 	##
 	def getWirelessNetworks(self, group, site=None):
 		
-		if site is None:
-			site = self.site
+		site = self.site_key( site )
 		
-		result = self.get( f'/sites/{site}/setting/wlans/{group}/ssids' )
-		
-		return result['data']
+		return self.get( f'/sites/{site}/setting/wlans/{group}/ssids' )
 

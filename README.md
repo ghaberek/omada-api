@@ -77,6 +77,8 @@ Currently supported settings:
 - `baseurl` - the base url to the controller
 - `site` - the name of the site in the controller (usually `Default`)
 - `verify` - set this to `False` to ignore self-signed certificate errors
+- `warnings` - set this to `False` to hide urllib3 warnings when `verify=False`
+- `verbose` - set this to `True` to force low-level reqeusts to output debugging info
 - `username` - the username to log in as
 - `password` - the password for the user
 
