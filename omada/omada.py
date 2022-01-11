@@ -11,7 +11,9 @@ from datetime import datetime
 
 from requests.cookies import RequestsCookieJar
 
-#define Logger for class-wide usage
+##
+## define Logger for class-wide usage
+##
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
