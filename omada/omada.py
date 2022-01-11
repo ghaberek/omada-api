@@ -9,6 +9,16 @@ import logging
 from configparser import ConfigParser
 from datetime import datetime
 
+from requests.cookies import RequestsCookieJar
+
+#define Logger for class-wide usage
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
 ##
 ## Omada API calls expect a timestamp in milliseconds.
 ##
