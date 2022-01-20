@@ -9,7 +9,17 @@ import logging
 from configparser import ConfigParser
 from datetime import datetime
 
-##
+from requests.cookies import RequestsCookieJar
+
+#define Logger for class-wide usage
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+## 
 ## Omada API calls expect a timestamp in milliseconds.
 ##
 def timestamp():
@@ -50,6 +60,7 @@ class Omada:
 		self.token  = None
 		self.currentPageSize = 10
 		self.currentUser = {}
+		self.omadacId = None
 		
 		if baseurl is not None:
 			# use the provided configuration
@@ -74,8 +85,10 @@ class Omada:
 			# could not find configuration
 			raise FileNotFoundError(config)
 		
-		# create a new session to hold cookies
 		self.session = requests.Session()
+		jar = RequestsCookieJar()
+		self.session.cookies = jar
+
 		self.session.verify = self.verify
 		
 		# hide warnings about insecure SSL requests
@@ -90,7 +103,6 @@ class Omada:
 			logging.basicConfig()
 			logging.getLogger().setLevel(logging.DEBUG)
 			# configure logging for requests
-			logger = logging.getLogger('requests.packages.urllib3')
 			logger.setLevel(logging.DEBUG)
 			logger.propagate = True
 
@@ -103,8 +115,11 @@ class Omada:
 	## Build a URL for the provided path.
 	##
 	def url_for(self, path):
-		return self.baseurl + Omada.ApiPath + path
-
+		baseurl = self.baseurl + "/"
+		if self.omadacId is not None:
+			baseurl = baseurl + self.omadacId
+		return baseurl + Omada.ApiPath + path
+		
 	##
 	## Look up a site key given the name.
 	##
@@ -153,11 +168,12 @@ class Omada:
 	## Perform a GET request and return the result.
 	##
 	def get(self, path, params={}, data=None, json=None):
-		
-		params['_'] = timestamp()
-		params['token'] = self.token
-		
-		response = self.session.get( self.url_for(path), params=params, data=data, json=json )
+
+		headers = {}
+		headers["Csrf-Token"] = self.token
+		self.session.headers.update(headers)
+
+		response = self.session.get( self.url_for(path), params=params, data=data, json=json , headers=self.session.headers)
 		response.raise_for_status()
 		
 		json = response.json()
@@ -201,7 +217,7 @@ class Omada:
 		
 		response = self.session.post( self.url_for(path), params=params, data=data, json=json )
 		response.raise_for_status()
-		
+		# 		
 		json = response.json()
 		if json['errorCode'] == 0:
 			return json['result'] if 'result' in json else None
@@ -226,10 +242,29 @@ class Omada:
 		raise OmadaError(json)
 
 	##
+	## Get OmadacId to prefix request
+	##
+	def getApiInfo(self):
+
+		response =  self.session.get( self.baseurl + '/api/info' )
+		response.raise_for_status()
+		
+		json = response.json()
+		
+		if json['errorCode'] == 0:
+			return json['result'] if 'result' in json else None
+		
+		raise OmadaError(json)
+
+	##
 	## Log in with the provided credentials and return the result.
 	##
 	def login(self, username=None, password=None):
 		
+		apiInfo = self.getApiInfo()
+		if 'omadacId' in apiInfo:
+			self.omadacId = apiInfo['omadacId']
+			
 		if username is None and password is None:
 			if self.config is None:
 				raise TypeError('username and password cannot be None')
@@ -393,4 +428,3 @@ class Omada:
 		site = self.site_key( site )
 		
 		return self.get( f'/sites/{site}/setting/wlans/{group}/ssids' )
-
