@@ -367,6 +367,48 @@ class Omada:
 		return self.get_paged( f'/sites/{site}/clients', params={'filters.active':'true'} )
 
 	##
+	## Returns the list of alerts for given site.
+	##
+	def getSiteAlerts(self, site=None, archived=False, level=None, module=None, search=None):
+
+		site = self.site_key( site )
+
+		params = {}
+		params['filters.archived'] = 'true' if archived else 'false'
+		if level in ['Error', 'Warning', 'Information']:
+			params['filters.level'] = level
+		if module in ['Operation', 'System', 'Device', 'Client']:
+			params['filters.module'] = module
+		if search:
+			params['searchKey'] = search
+		return self.get_paged( f'/sites/{site}/alerts', params=params )
+
+	##
+	## Returns the list of events for given site.
+	##
+	def getSiteEvents(self, site=None, level=None, module=None, search=None):
+
+		site = self.site_key( site )
+
+		params = {}
+		if level in ['Error', 'Warning', 'Information']:
+			params['filters.level'] = level
+		if module in ['Operation', 'System', 'Device', 'Client']:
+			params['filters.module'] = module
+		if search:
+			params['searchKey'] = search
+		return self.get_paged( f'/sites/{site}/events', params=params )
+
+	##
+	## Returns the notification settings for given site.
+	##
+	def getSiteNotifications(self, site=None):
+
+		site = self.site_key( site )
+
+		return self.get( f'/sites/{site}/notification' )
+
+	##
 	## Returns the list of settings for the given site.
 	##
 	def getSiteSettings(self, site=None):
