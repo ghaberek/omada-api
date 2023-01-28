@@ -1,18 +1,18 @@
-# -*- coding: future_fstrings -*-
+#!/usr/bin/env python3
 
 import sys, collections
 from omada import Omada
 
 FIELDDEF = collections.OrderedDict([
-	('name',        ('USERNAME',   20)),
-	('ip',          ('IP ADDRESS', 16)),
-	('active',      ('STATUS',     12)),
-	('networkName', ('NETWORK',    12)),
-	('port',        ('PORT',       16)),
-	('activity',    ('ACTIVITY',   12)),
-	('trafficDown', ('DOWNLOAD',   10)),
-	('trafficUp',   ('UPLOAD',     10)),
-	('uptime',      ('UPTIME',     16)),
+	('name',        ('USERNAME',     20)),
+	('ip',          ('IP ADDRESS',   16)),
+	('active',      ('STATUS',       12)),
+	('networkName', ('SSID/NETWORK', 16)),
+	('port',        ('AP/PORT',      16)),
+	('activity',    ('ACTIVITY',     12)),
+	('trafficDown', ('DOWNLOAD',     10)),
+	('trafficUp',   ('UPLOAD',       10)),
+	('uptime',      ('UPTIME',       16)),
 ])
 
 def format_status( active ):
@@ -75,6 +75,10 @@ def print_client( client ):
 		elif key == 'uptime':
 			client[key] = format_time( client['uptime'] )
 
+	if client['connectDevType'] == 'ap':
+		client['networkName'] = client['ssid']
+		client['port'] = client['apName']
+
 	for key in FIELDDEF:
 
 		text = client[key] if key in client else '--'
@@ -97,15 +101,10 @@ def main():
 	omada = Omada()
 	omada.login()
 
-	clients = omada.getSiteClients()
+	print_header()
 
-	if omada.hasData( clients ):
-		print_header()
-
-	while omada.hasData( clients ):
-		for client in clients['data']:
-			print_client( client )
-		clients = omada.nextPage( clients )
+	for client in omada.getSiteClients():
+		print_client( client )
 
 	omada.logout()
 

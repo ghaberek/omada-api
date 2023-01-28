@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 
 import os
 import requests
@@ -8,7 +7,7 @@ import http.client
 import logging
 from configparser import ConfigParser
 from datetime import datetime
-
+from enum import Enum
 from requests.cookies import RequestsCookieJar
 
 #define Logger for class-wide usage
@@ -19,7 +18,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-## 
+##
 ## Omada API calls expect a timestamp in milliseconds.
 ##
 def timestamp():
@@ -33,18 +32,18 @@ class OmadaError(Exception):
 	def __init__(self, json):
 		self.errorCode = 0
 		self.msg = None
-		
+
 		if json is None:
 			raise TypeError('json cannot be None')
-		
+
 		if 'errorCode' in json:
-			self.errorCode = json['errorCode']
-		
+			self.errorCode = int( json['errorCode'] )
+
 		if 'msg' in json:
 			self.msg = '"' + json['msg'] + '"'
 
 	def __str__(self):
-		return f"errorCode={self.errorCode}, msg={self.msg}"
+		return f'errorCode={self.errorCode}, msg={self.msg}'
 
 ##
 ## The main Omada API class.
@@ -52,16 +51,47 @@ class OmadaError(Exception):
 class Omada:
 
 	##
+	## Default API
+	##
+	ApiPath = '/api/v2'
+
+	##
+	## Group types
+	##
+	class GroupType(Enum):
+		IPGroup     = 0 # "IP Group"
+		IPPortGroup = 1 # "IP-Port Group"
+		MACGroup    = 2 # "MAC Group"
+
+	##
+	## Alert and event levels
+	##
+	class LevelFilter(Enum):
+		Error       = 0
+		Warning     = 1
+		Information = 2
+
+	##
+	## Alert and event modules
+	##
+	class ModuleFilter(Enum):
+		Operation = 0
+		System    = 1
+		Device    = 2
+		Client    = 3
+
+	##
 	## Initialize a new Omada API instance.
 	##
 	def __init__(self, config='omada.cfg', baseurl=None, site='Default', verify=True, warnings=True, verbose=False):
-		
+
 		self.config = None
-		self.token  = None
+		self.loginResult = None
 		self.currentPageSize = 10
 		self.currentUser = {}
-		self.omadacId = None
-		
+		self.apiPath = Omada.ApiPath
+		self.omadacId = ''
+
 		if baseurl is not None:
 			# use the provided configuration
 			self.baseurl  = baseurl
@@ -84,17 +114,16 @@ class Omada:
 		else:
 			# could not find configuration
 			raise FileNotFoundError(config)
-		
-		self.session = requests.Session()
-		jar = RequestsCookieJar()
-		self.session.cookies = jar
 
+		# set up requests session and cookies
+		self.session = requests.Session()
+		self.session.cookies = RequestsCookieJar()
 		self.session.verify = self.verify
-		
+
 		# hide warnings about insecure SSL requests
 		if self.verify == False and self.warnings == False:
 			urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-		
+
 		# enable verbose output
 		if self.verbose:
 			# set debug level in http.client
@@ -107,214 +136,266 @@ class Omada:
 			logger.propagate = True
 
 	##
-	## Current API path.
-	##
-	ApiPath = '/api/v2'
-
-	##
 	## Build a URL for the provided path.
 	##
-	def url_for(self, path):
-		baseurl = self.baseurl + "/"
-		if self.omadacId is not None:
-			baseurl = baseurl + self.omadacId
-		return baseurl + Omada.ApiPath + path
-		
+	def __buildUrl(self, path):
+		return self.baseurl + self.omadacId + self.apiPath + path
+
 	##
 	## Look up a site key given the name.
 	##
-	def site_key(self, name):
-		if name is None:
-			name = self.site
+	def __findKey(self, name=None):
+
+		# Use the stored site if not provided.
+		if name is None: name = self.site
+
+		# Look for the site in the privilege list.
 		for site in self.currentUser['privilege']['sites']:
 			if site['name'] == name: return site['key']
-		return name
 
-	##
-	## Return True if a result contains data.
-	##
-	def hasData(self, result):
-		return (result is not None) and ('data' in result) and (len(result['data']) > 0)
-
-	##
-	## Returns the next page of data if more is available.
-	##
-	def nextPage(self, result):
-		
-		if 'path' not in result:
-			return None
-		
-		path = result['path']
-		del result['path']
-		
-		if 'params' not in result:
-			return None
-		
-		params = result['params']
-		del result['params']
-		
-		totalRows   = int( result['totalRows'] )
-		currentPage = int( result['currentPage'] )
-		currentSize = int( result['currentSize'] )
-		dataLength  = len( result['data'] )
-		
-		if dataLength + (currentPage-1)*currentSize >= totalRows:
-			return None
-		
-		params['currentPage'] = currentPage + 1
-		return self.get_paged( path, params )
+		raise PermissionError(f'current user does not have privilege to site "{name}"')
 
 	##
 	## Perform a GET request and return the result.
 	##
-	def get(self, path, params={}, data=None, json=None):
+	def __get(self, path, params={}, data=None, json=None):
 
-		headers = {}
-		headers["Csrf-Token"] = self.token
-		self.session.headers.update(headers)
+		if self.loginResult is None:
+			raise ConnectionError('not logged in')
 
-		response = self.session.get( self.url_for(path), params=params, data=data, json=json , headers=self.session.headers)
+		if not isinstance(params, dict):
+			raise TypeError('params must be a dictionary')
+
+		response = self.session.get( self.__buildUrl(path), params=params, data=data, json=json, headers=self.session.headers )
 		response.raise_for_status()
-		
+
 		json = response.json()
 		if json['errorCode'] == 0:
 			return json['result'] if 'result' in json else None
-		
-		raise OmadaError(json)
 
-	##
-	## Perform a paged GET request and return the result.
-	##
-	def get_paged(self, path, params={}, data=None, json=None):
-		
-		params['_'] = timestamp()
-		params['token'] = self.token
-		
-		if 'currentPage' not in params:
-			params['currentPage'] = 1
-		
-		if 'currentPageSize' not in params:
-			params['currentPageSize'] = self.currentPageSize
-		
-		response = self.session.get( self.url_for(path), params=params, data=data, json=json )
-		response.raise_for_status()
-		
-		json = response.json()
-		if json['errorCode'] == 0:
-			json['result']['path'] = path
-			json['result']['params'] = params
-			return json['result'] if 'result' in json else None
-		
 		raise OmadaError(json)
 
 	##
 	## Perform a POST request and return the result.
 	##
-	def post(self, path, params={}, data=None, json=None):
-		
+	def __post(self, path, params={}, data=None, json=None):
+
+		if self.loginResult is None:
+			raise ConnectionError('not logged in')
+
+		if not isinstance(params, dict):
+			raise TypeError('params must be a dictionary')
+
 		params['_'] = timestamp()
-		params['token'] = self.token
-		
-		response = self.session.post( self.url_for(path), params=params, data=data, json=json )
+		params['token'] = self.loginResult['token']
+
+		response = self.session.post( self.__buildUrl(path), params=params, data=data, json=json )
 		response.raise_for_status()
-		# 		
+
 		json = response.json()
 		if json['errorCode'] == 0:
 			return json['result'] if 'result' in json else None
-		
+
 		raise OmadaError(json)
 
 	##
 	## Perform a PATCH request and return the result.
 	##
-	def patch(self, path, params={}, data=None, json=None):
-		
+	def __patch(self, path, params={}, data=None, json=None):
+
+		if self.loginResult is None:
+			raise ConnectionError('not logged in')
+
+		if not isinstance(params, dict):
+			raise TypeError('params must be a dictionary')
+
 		params['_'] = timestamp()
-		params['token'] = self.token
-		
-		response = self.session.patch( self.url_for(path), params=params, data=data, json=json )
+		params['token'] = self.loginResult['token']
+
+		response = self.session.patch( self.__buildUrl(path), params=params, data=data, json=json )
 		response.raise_for_status()
-		
+
 		json = response.json()
 		if json['errorCode'] == 0:
 			return json['result'] if 'result' in json else None
-		
+
 		raise OmadaError(json)
 
 	##
-	## Get OmadacId to prefix request
+	## Return True if a result contains data.
+	##
+	def __hasData(self, result):
+		return (result is not None) and ('data' in result) and (len(result['data']) > 0)
+
+	##
+	## Perform a paged GET request and return the result.
+	##
+	def __getPaged(self, path, params={}, data=None, json=None):
+
+		if self.loginResult is None:
+			raise ConnectionError('not logged in')
+
+		if not isinstance(params, dict):
+			raise TypeError('params must be a dictionary')
+
+		params['_'] = timestamp()
+		params['token'] = self.loginResult['token']
+
+		if 'currentPage' not in params:
+			params['currentPage'] = 1
+
+		if 'currentPageSize' not in params:
+			params['currentPageSize'] = self.currentPageSize
+
+		response = self.session.get( self.__buildUrl(path), params=params, data=data, json=json )
+		response.raise_for_status()
+
+		json = response.json()
+		if json['errorCode'] == 0:
+			json['result']['path'] = path
+			json['result']['params'] = params
+			return json['result']
+
+		raise OmadaError(json)
+
+	##
+	## Returns the next page of data if more is available.
+	##
+	def __nextPage(self, result):
+
+		if 'path' in result:
+			path = result['path']
+			del result['path']
+		else:
+			return None
+
+		if 'params' in result:
+			params = result['params']
+			del result['params']
+		else:
+			return None
+
+		totalRows   = int( result['totalRows'] )
+		currentPage = int( result['currentPage'] )
+		currentSize = int( result['currentSize'] )
+		dataLength  = len( result['data'] )
+
+		if dataLength + (currentPage-1)*currentSize >= totalRows:
+			return None
+
+		params['currentPage'] = currentPage + 1
+		return self.__getPaged( path, params )
+
+	##
+	## Perform a GET request and yield the results.
+	##
+	def __geterator(self, path, params={}, data=None, json=None):
+		result = self.__getPaged( path, params, data, json )
+		while self.__hasData( result ):
+			for item in result['data']: yield item
+			result = self.__nextPage( result )
+
+	##
+	## Issue a warning if warnings are enabled.
+	##
+	def __warn(self, message, category=None, stacklevel=1, source=None):
+		if self.warnings: warnings.warn( message, category, stacklevel, source )
+
+	##
+	## Get OmadacId to prefix request. (Required for version 5.)
 	##
 	def getApiInfo(self):
 
-		response =  self.session.get( self.baseurl + '/api/info' )
+		# This uses a different path, so perform request manually.
+		response = self.session.get( self.baseurl + '/api/info' )
 		response.raise_for_status()
-		
+
 		json = response.json()
-		
 		if json['errorCode'] == 0:
 			return json['result'] if 'result' in json else None
-		
+
 		raise OmadaError(json)
 
 	##
 	## Log in with the provided credentials and return the result.
 	##
 	def login(self, username=None, password=None):
-		
-		apiInfo = self.getApiInfo()
-		if 'omadacId' in apiInfo:
-			self.omadacId = apiInfo['omadacId']
-			
-		if username is None and password is None:
-			if self.config is None:
-				raise TypeError('username and password cannot be None')
-			try:
-				username = self.config['omada'].get('username')
-				password = self.config['omada'].get('password')
-			except:
-				raise
-		
-		result = self.post( '/login', json={'username':username,'password':password} )
-		self.token = result['token']
-		self.currentUser = self.getCurrentUser()
-		return result
+
+		# Only try to log in if we're not already logged in.
+		if self.loginResult is None:
+
+			# Fetch the API info from the controller. (Does not require login.)
+			apiInfo = self.getApiInfo()
+
+			# Store the omadacId value. (Required by version 5.)
+			if 'omadacId' in apiInfo:
+				self.omadacId = '/' + apiInfo['omadacId']
+
+			# Get the username and password if not specified.
+			if username is None and password is None:
+				if self.config is None:
+					raise TypeError('username and password cannot be None')
+				try:
+					username = self.config['omada'].get('username')
+					password = self.config['omada'].get('password')
+				except:
+					raise
+
+			# Perform the login request manually.
+			response = self.session.post( self.__buildUrl('/login'), json={'username':username,'password':password} )
+			response.raise_for_status()
+
+			# Get the login response.
+			json = response.json()
+			if json['errorCode'] != 0:
+				raise OmadaError(json)
+
+			# Store the login result.
+			self.loginResult = json['result']
+
+			# Store CSRF token header.
+			self.session.headers.update({
+				"Csrf-Token": self.loginResult['token']
+			})
+
+			# Get the current user info.
+			self.currentUser = self.getCurrentUser()
+
+		return self.loginResult
 
 	##
 	## Log out of the current session. Return value is always None.
 	##
 	def logout(self):
-		return self.post( '/logout' )
+
+		result = None
+
+		# Only try to log out if we're already logged in.
+		if self.loginResult is not None:
+			# Send the logout request.
+			result = self.__post( '/logout' )
+			# Clear the stored result.
+			self.loginResult = None
+
+		return result
 
 	##
 	## Returns the current login status.
 	##
 	def getLoginStatus(self):
-		return self.get( '/loginStatus' )
+		return self.__get( '/loginStatus' )
 
 	##
 	## Returns the current user information.
 	##
 	def getCurrentUser(self):
-		return self.get( '/users/current' )
-
-		## Group Types
-	IPGroup   = 0 # "IP Group"
-	PortGroup = 1 # "IP-Port Group"
-	MACGroup  = 2 # "MAC Group"
+		return self.__get( '/users/current' )
 
 	##
 	## Returns the list of groups for the given site.
 	##
 	def getSiteGroups(self, site=None, type=None):
-		
-		site = self.site_key( site )
-		
-		if type is None:
-			result = self.get( f'/sites/{site}/setting/profiles/groups' )
-		else:
-			result = self.get( f'/sites/{site}/setting/profiles/groups/{type}' )
-		
-		return result
+		return self.__get( f'/sites/{self.__findKey(site)}/setting/profiles/groups' + (f'/{type}' if type else '') )
 
 	##
 	## Returns the list of portal candidates for the given site.
@@ -322,132 +403,105 @@ class Omada:
 	## This is the "SSID & Network" list on Settings > Authentication > Portal > Basic Info.
 	##
 	def getPortalCandidates(self, site=None):
-		
-		site = self.site_key( site )
-		
-		return self.get( f'/sites/{site}/setting/portal/candidates' )
+		return self.__get( f'/sites/{self.__findKey(site)}/setting/portal/candidates' )
 
 	##
 	## Returns the list of RADIUS profiles for the given site.
 	##
 	def getRadiusProfiles(self, site=None):
-		
-		site = self.site_key( site )
-		
-		return self.get( f'/sites/{site}/setting/radiusProfiles' )
+		return self.__get( f'/sites/{self.__findKey(site)}/setting/radiusProfiles' )
 
 	##
 	## Returns the list of scenarios.
 	##
 	def getScenarios(self):
-		return self.get( '/scenarios' )
+		return self.__get( '/scenarios' )
 
 	##
 	## Returns the list of all sites.
 	##
 	def getSites(self):
-		return self.get_paged( f'/sites' )
+		return self.__geterator( f'/sites' )
 
 	##
 	## Returns the list of devices for given site.
 	##
 	def getSiteDevices(self, site=None):
-		
-		site = self.site_key( site )
-		
-		return self.get( f'/sites/{site}/devices' )
+		return self.__get( f'/sites/{self.__findKey(site)}/devices' )
 
 	##
 	## Returns the list of active clients for given site.
 	##
 	def getSiteClients(self, site=None):
-		
-		site = self.site_key( site )
-		
-		return self.get_paged( f'/sites/{site}/clients', params={'filters.active':'true'} )
+		return self.__geterator( f'/sites/{self.__findKey(site)}/clients', params={'filters.active':'true'} )
 
 	##
 	## Returns the list of alerts for given site.
 	##
-	def getSiteAlerts(self, site=None, archived=False, level=None, module=None, search=None):
+	def getSiteAlerts(self, site=None, archived=False, level=None, module=None, searchKey=None):
 
-		site = self.site_key( site )
+		params = {'filters.archived': 'true' if archived else 'false'}
 
-		params = {}
-		params['filters.archived'] = 'true' if archived else 'false'
-		if level in ['Error', 'Warning', 'Information']:
+		if level is not None:
+			if level not in ValidLevelFilters:
+				raise TypeError('invalid level filter')
 			params['filters.level'] = level
-		if module in ['Operation', 'System', 'Device', 'Client']:
+
+		if module is not None:
+			if level not in ValidModuleFilters:
+				raise TypeError('invalid module filter')
 			params['filters.module'] = module
-		if search:
-			params['searchKey'] = search
-		return self.get_paged( f'/sites/{site}/alerts', params=params )
+
+		if searchKey is not None:
+			params['searchKey'] = searchKey
+
+		return self.__geterator( f'/sites/{self.__findKey(site)}/alerts', params=params )
 
 	##
 	## Returns the list of events for given site.
 	##
-	def getSiteEvents(self, site=None, level=None, module=None, search=None):
-
-		site = self.site_key( site )
+	def getSiteEvents(self, site=None, level=None, module=None, searchKey=None):
 
 		params = {}
-		if level in ['Error', 'Warning', 'Information']:
+
+		if level is not None:
+			if level not in ValidLevelFilters:
+				raise TypeError('invalid level filter')
 			params['filters.level'] = level
-		if module in ['Operation', 'System', 'Device', 'Client']:
+
+		if module is not None:
+			if module not in ValidModuleFilters:
+				raise TypeError('invalid module filter')
 			params['filters.module'] = module
-		if search:
-			params['searchKey'] = search
-		return self.get_paged( f'/sites/{site}/events', params=params )
+
+		if searchKey is not None:
+			params['searchKey'] = searchKey
+
+		return self.__geterator( f'/sites/{self.__findKey(site)}/events', params=params )
 
 	##
 	## Returns the notification settings for given site.
 	##
 	def getSiteNotifications(self, site=None):
-
-		site = self.site_key( site )
-
-		return self.get( f'/sites/{site}/notification' )
+		return self.__get( f'/sites/{self.__findKey(site)}/notification' )
 
 	##
 	## Returns the list of settings for the given site.
 	##
 	def getSiteSettings(self, site=None):
-		
-		site = self.site_key( site )
-		
-		result = self.get( f'/sites/{site}/setting' )
-		
-		# work-around for error when sending PATCH for site settings (see below)
-		if 'beaconControl' in result:
-			if self.warnings:
-				warnings.warn( "settings['beaconControl'] was removed as it causes an error", stacklevel=2 )
-			del result['beaconControl']
-		
-		return result
+		return self.__get( f'/sites/{self.__findKey(site)}/setting' )
 
 	##
 	## Push back the settings for the site.
 	##
 	def setSiteSettings(self, settings, site=None):
-		
-		site = self.site_key( site )
-		
-		# not sure why but setting 'beaconControl' here does not work, returns {'errorCode': -1001}
-		if 'beaconControl' in settings:
-			if self.warnings:
-				warnings.warn( "settings['beaconControl'] was removed as it causes an error", stacklevel=2 )
-			del settings['beaconControl']
-		
-		return self.patch( f'/sites/{site}/setting', json=settings )
+		return self.__patch( f'/sites/{self.__findKey(site)}/setting', json=settings )
 
 	##
 	## Returns the list of timerange profiles for the given site.
 	##
 	def getTimeRanges(self, site=None):
-		
-		site = self.site_key( site )
-		
-		return self.get( f'/sites/{site}/setting/profiles/timeranges' )
+		return self.__get( f'/sites/{self.__findKey(site)}/setting/profiles/timeranges' )
 
 	##
 	## Returns the list of wireless network groups.
@@ -455,10 +509,7 @@ class Omada:
 	## This is the "WLAN Group" list on Settings > Wireless Networks.
 	##
 	def getWirelessGroups(self, site=None):
-		
-		site = self.site_key( site )
-		
-		return self.get( f'/sites/{site}/setting/wlans' )
+		return self.__get( f'/sites/{self.__findKey(site)}/setting/wlans' )
 
 	##
 	## Returns the list of wireless networks for the given group.
@@ -466,7 +517,4 @@ class Omada:
 	## This is the main SSID list on Settings > Wireless Networks.
 	##
 	def getWirelessNetworks(self, group, site=None):
-		
-		site = self.site_key( site )
-		
-		return self.get( f'/sites/{site}/setting/wlans/{group}/ssids' )
+		return self.__get( f'/sites/{self.__findKey(site)}/setting/wlans/{group}/ssids' )

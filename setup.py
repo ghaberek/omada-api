@@ -6,7 +6,7 @@ with open( 'README.md', 'r', encoding='utf-8' ) as fh:
 
 setuptools.setup(
 	name='omada-api',
-	version='4.1.5',
+	version='5.7.4',
 	description='A simple Python wrapper for the TP-Link Omada Software Controller API',
 	long_description=README,
 	long_description_content_type='text/markdown',
@@ -19,7 +19,7 @@ setuptools.setup(
 		'Intended Audience :: Developers',
 		'License :: OSI Approved :: MIT License',
 		'Operating System :: OS Independent',
-		'Programming Language :: Python :: 3.5',
+		'Programming Language :: Python :: 3.7',
 		'Topic :: Software Development :: Libraries',
 	],
 	keywords='tplink omada wrapper',
@@ -30,8 +30,7 @@ setuptools.setup(
 	},
 	packages=find_packages(),
 	install_requires=[
-		'future-fstrings>=1.2.0',
-		'requests>=2.22.0'
+		'requests>=2.28.0'
 	],
-	python_requires='>=3.5',
+	python_requires='>=3.7',
 )

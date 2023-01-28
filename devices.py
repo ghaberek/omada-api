@@ -1,4 +1,4 @@
-# -*- coding: future_fstrings -*-
+#!/usr/bin/env python3
 
 import sys, collections
 from omada import Omada
@@ -69,12 +69,9 @@ def main():
 	omada = Omada()
 	omada.login()
 
-	devices = omada.getSiteDevices()
+	print_header()
 
-	if len( devices ):
-		print_header()
-
-	for device in devices:
+	for device in omada.getSiteDevices():
 		print_device( device )
 
 	omada.logout()
