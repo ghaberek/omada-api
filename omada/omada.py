@@ -528,7 +528,7 @@ class Omada:
 	##
 	## Push back the settings for the profile
 	##
-	def setPoeForProfile(self, profileId, settings, site=None):
+	def setProfileSettings(self, profileId, settings, site=None):
 		return self.__patch( f'/sites/{self.__findKey(site)}/setting/lan/profiles/{profileId}', json=settings)
 	
 	##

@@ -23,7 +23,7 @@ def main():
 		profileId = omada.getProfileId(sys.argv[1])
 		settings = omada.getProfileSettings(profileId)
 		settings['poe'] = sys.argv[2]
-		omada.setPoeForProfile(profileId, settings)
+		omada.setProfileSettings(profileId, settings)
 
 		settings = omada.getProfileSettings(profileId)
 		print( f"Changed the poe setting for profile {settings['name']} to {format_poe(settings['poe'])}.")
