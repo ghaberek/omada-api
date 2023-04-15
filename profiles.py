@@ -4,9 +4,10 @@ import sys, collections
 from omada import Omada
 
 FIELDDEF = collections.OrderedDict([
-	('id',          ('ID',           30)),
-	('name',        ('NAME',         30)),
-	('poe',         ('POE',          30))
+	('id',              ('ID',                30)),
+	('name',            ('NAME',              30)),
+	('poe',             ('POE',               30)),
+	('nativeNetworkId', ('Native Network ID', 30)),
 ])
 
 def format_poe (poe):
