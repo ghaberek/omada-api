@@ -496,7 +496,13 @@ class Omada:
 	##
 	def setSiteSettings(self, settings, site=None):
 		return self.__patch( f'/sites/{self.__findKey(site)}/setting', json=settings )
-
+	
+	##
+	## Returns the list of profiles for the given site.
+	##
+	def getProfiles(self, site=None):
+		return self.__geterator( f'/sites/{self.__findKey(site)}/setting/lan/profiles' )
+	
 	##
 	## Returns the list of timerange profiles for the given site.
 	##
