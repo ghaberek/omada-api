@@ -4,6 +4,19 @@ A simple Python wrapper for the [TP-Link Omada Software Controller](https://www.
 
 [![Test Python versions](https://github.com/ghaberek/omada-api/actions/workflows/versions.yml/badge.svg)](https://github.com/ghaberek/omada-api/actions/workflows/versions.yml)
 
+## Resources
+
+Here are some links which may be helpful when using or extending this library:
+
+- [Omada SDN Controller V5.9.9 API Document](https://community.tp-link.com/en/business/forum/topic/590430?replyId=1196216)
+- [Omada SDN Controller V5.4.6 API Document](https://community.tp-link.com/en/business/forum/topic/590430?replyId=1196214)
+- [Omada SDN Controller V5.0.15 API Document](https://community.tp-link.com/en/business/forum/topic/529298?replyId=1044808)
+- [Omada SDN Controller V4.1.5 API Document](https://community.tp-link.com/en/business/forum/topic/253944?replyId=565824)
+- [Requirements of Establishing an External Portal Server (> 5.0.15)](https://www.tp-link.com/us/support/faq/3231/)
+- [Requirements of Establishing an External Portal Server (> 4.1.5)](https://www.tp-link.com/us/support/faq/2907/)
+- [Requirements of Establishing an External Portal Server (> 2.6.0)](https://www.tp-link.com/us/support/faq/2274/)
+- [Requirements of Establishing an External Portal Server (< 2.5.4)](https://www.tp-link.com/us/support/faq/928/)
+
 ## Usage
 
 Currently this is just the bare-minimum required to log in, get site settings, push site settings, and log out.
