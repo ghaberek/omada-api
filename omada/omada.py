@@ -302,6 +302,12 @@ class Omada:
 		if self.warnings: warnings.warn( message, category, stacklevel, source )
 
 	##
+	## Replace any colons with dashes in supplied mac addresses
+	##
+	def __macConverter(self, mac = ""):
+		return mac.replace(':','-')
+	
+	##
 	## Get OmadacId to prefix request. (Required for version 5.)
 	##
 	def getApiInfo(self):
@@ -435,6 +441,30 @@ class Omada:
 	def getSiteClients(self, site=None):
 		return self.__geterator( f'/sites/{self.__findKey(site)}/clients', params={'filters.active':'true'} )
 
+	##
+	## Get client list from insights (also includes disconnected but seen ones)
+	##
+	def getSiteKnownClients(self, site=None):
+		return self.__geterator( f'/sites/{self.__findKey(site)}/insight/clients' )
+
+	##
+	## Gets client details
+	##
+	def getSiteClientDetails(self, site=None, client_mac=''):
+		return self.__get( f'/sites/{self.__findKey(site)}/clients/{self.__macConverter(client_mac)}', params={'filters.active':'true'} )
+	
+	##
+	## Block client by mac address
+	##
+	def blockClient(self, site=None, client_mac=''):
+		return self.__post( f'/sites/{self.__findKey(site)}/cmd/clients/{self.__macConverter(client_mac)}/block')
+	
+	##
+	## Unblock client by mac address
+	##
+	def unblockClient(self, site=None, client_mac=''):
+		return self.__post( f'/sites/{self.__findKey(site)}/cmd/clients/{self.__macConverter(client_mac)}/unblock')
+	
 	##
 	## Returns the list of alerts for given site.
 	##
