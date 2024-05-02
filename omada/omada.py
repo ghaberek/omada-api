@@ -1,5 +1,6 @@
 
 import os
+import json
 import requests
 import urllib3
 import warnings
@@ -178,7 +179,7 @@ class Omada:
 	##
 	## Perform a POST request and return the result.
 	##
-	def __post(self, path, params={}, data=None, json=None):
+	def __post(self, path, params={}, data=None, files=None, json=None):
 
 		if self.loginResult is None:
 			raise ConnectionError('not logged in')
@@ -188,8 +189,7 @@ class Omada:
 
 		params['_'] = timestamp()
 		params['token'] = self.loginResult['token']
-
-		response = self.session.post( self.__buildUrl(path), params=params, data=data, json=json )
+		response = self.session.post( self.__buildUrl(path), params=params, data=data, files=files, json=json )
 		response.raise_for_status()
 
 		json = response.json()
@@ -497,6 +497,78 @@ class Omada:
 	def setSiteSettings(self, settings, site=None):
 		return self.__patch( f'/sites/{self.__findKey(site)}/setting', json=settings )
 
+	##
+	## Returns the list of settings for the controller.
+	##
+	def getControllerSettings(self):
+		return self.__get( f'/controller/setting' )
+
+	##
+	## Push back the settings for the controller.
+	##
+	def setControllerSettings(self, settings):
+		return self.__patch( f'/controller/setting', json=settings )
+
+
+	def setControllerJksCertificate(self, jks_path, password):
+		return self.__setControllerCertificate(cert_type="JKS",
+						       cert_path=jks_path,
+						       key_password=password)
+
+
+	def setControllerPfxCertificate(self, pfx_path, password):
+		return self.__setControllerCertificate(cert_type="PFX",
+						       cert_path=pfx_path,
+						       key_password=password)
+
+
+	def setControllerPemCertificate(self, cert_path, key_path):
+		return self.__setControllerCertificate(cert_type="PEM",
+						       cert_path=cert_path,
+						       key_path=key_path)
+
+
+	def __uploadFile(self, src_path, dest_path, data, content_type="application/octet-stream"):
+		src_name = os.path.basename(src_path)
+		with open(src_path, 'rb') as src_file:
+			result = self.__post(f'/files/{dest_path}',
+					     files={'file': (src_name,
+							     src_file,
+							     content_type),
+						    'data': (None, json.dumps(data))})
+	
+	##
+	## Set new certificate for the controller
+	##
+	def __setControllerCertificate(self, cert_type, cert_path, key_path=None, key_password=None):
+		r_cert = self.__uploadFile(cert_path,
+					   'controller/certificate',
+					   {"cerName": os.path.basename(cert_path)})
+		if key_path:
+			r_key = self.__uploadFile(key_path,
+						  'controller/key',
+						  {"keyName": os.path.basename(key_path)})
+
+		# re-upload same settings to force cert file validation
+		settings = self.getControllerSettings()
+		cert_settings = settings['certificate']
+		cert_settings['cerType'] = cert_type
+		cert_settings['enable'] = True
+		if key_password:
+			cert_settings['keyPassword'] = key_password
+		else:
+			cert_settings.pop('keyPassword', None)
+		if not key_path:
+			# Delete PEM key file details if they exist
+			cert_settings.pop('keyId', None)
+			cert_settings.pop('keyName', None)
+		return self.setControllerSettings(settings)
+			
+
+	def reboot(self):
+		return self.__post('/cmd/reboot')
+	
+	
 	##
 	## Returns the list of timerange profiles for the given site.
 	##
