@@ -590,3 +590,19 @@ class Omada:
 	##
 	def getWirelessNetworks(self, group, site=None):
 		return self.__get( f'/sites/{self.__findKey(site)}/setting/wlans/{group}/ssids' )
+
+	##
+	## Returns client history based on clients mac adress
+	##
+	## Function does not validate mac address, use getSiteClients() to find clients of interest.
+	## timeStart and timeEnd are in unix timestamps (type int)
+	##
+	def getClientHistory(self, clientmac, site=None, timeStart = None, timeEnd = None):
+		params = dict()
+
+		if timeStart is not None:
+			params["filters.timeStart"] = int(timeStart)
+		if timeEnd is not None:
+			params["filters.timeEnd"] = int(timeEnd)
+
+		return self.__geterator(f"/sites/{self.__findKey(site)}/clientHistory/{clientmac}", params=params)
