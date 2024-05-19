@@ -436,6 +436,15 @@ class Omada:
 		return self.__geterator( f'/sites/{self.__findKey(site)}/clients', params={'filters.active':'true'} )
 
 	##
+	##  Returns the list of active clients for given AP and site.
+	##
+	def getAPClients(self, site=None, apmac=None):
+	        return self.__geterator(
+	            f"/sites/{self.__findKey(site)}/clients",
+	            params={"filters.active": "true", "filters.apMac": apmac},
+	        )
+	
+	##
 	## Returns the list of alerts for given site.
 	##
 	def getSiteAlerts(self, site=None, archived=False, level=None, module=None, searchKey=None):
