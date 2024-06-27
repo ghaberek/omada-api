@@ -590,3 +590,25 @@ class Omada:
 	##
 	def getWirelessNetworks(self, group, site=None):
 		return self.__get( f'/sites/{self.__findKey(site)}/setting/wlans/{group}/ssids' )
+
+	##
+	## Returns the list of voucher groups for the given site.
+	##
+	def getVoucherGroups(self, site=None):
+		return self.__geterator( f'/hotspot/sites/{self.__findKey(site)}/voucherGroups' )
+
+	##
+	## Returns the details for the given voucher group and site.
+	##
+	def getVoucherGroupDetails(self, id, site=None):
+		return self.__get( f'/hotspot/sites/{self.__findKey(site)}/voucherGroups/{id}' )
+
+	##
+	## Returns unused vouchers for the given voucher group and site, up to an
+	## optional maximum number
+	##
+	def getUnusedVouchers(self, id, maxnr=None, site=None):
+		res = self.__get( f'/hotspot/sites/{self.__findKey(site)}/voucherGroups/{id}/printUnused' )
+		data = res.get('data', [])
+		return data if maxnr is None else data[:maxnr]
+
