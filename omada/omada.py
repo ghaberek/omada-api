@@ -590,3 +590,20 @@ class Omada:
 	##
 	def getWirelessNetworks(self, group, site=None):
 		return self.__get( f'/sites/{self.__findKey(site)}/setting/wlans/{group}/ssids' )
+
+	##
+	## Returns the gateway device specified by the MAC address.
+	##
+	## This is a Gateway device listed on Device List.
+	##
+	def getGatewayDevice(self, mac, site=None):
+		return self.__get( f'/sites/{self.__findKey(site)}/gateways/{mac}' )
+	
+	##
+	## Control the internet status of a WAN port in a gateway device specified by the MAC address.
+	##
+	## enable = True, Make WAN port connected.
+	## enable = False, Make WAN port disconnected.
+	##
+	def setInternetStatus(self, mac, port_id, enable, site=None):
+		return self.__post( f'/sites/{self.__findKey(site)}/cmd/gateways/{mac}/internetState', json={'portId': port_id, 'operation': 1 if enable else 0} )
