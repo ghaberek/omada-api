@@ -61,7 +61,7 @@ def print_event( event ):
 	sys.stdout.write( '\n' )
 
 def main():
-	omada = Omada()
+	omada = Omada('omada.cfg')
 	omada.login()
 
 	print_header()

@@ -8,7 +8,7 @@ def main():
 		print( f"usage: {sys.argv[0]} [on|off]" )
 		return
 
-	omada = Omada()
+	omada = Omada('omada.cfg')
 	omada.login()
 
 	settings = omada.getSiteSettings()

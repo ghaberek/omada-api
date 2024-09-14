@@ -60,7 +60,7 @@ def print_alert( alert ):
 	sys.stdout.write( '\n' )
 
 def main():
-	omada = Omada()
+	omada = Omada('omada.cfg')
 	omada.login()
 
 	print_header()

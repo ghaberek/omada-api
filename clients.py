@@ -98,7 +98,7 @@ def print_client( client ):
 	sys.stdout.write( '\n' )
 
 def main():
-	omada = Omada()
+	omada = Omada('omada.cfg')
 	omada.login()
 
 	print_header()
