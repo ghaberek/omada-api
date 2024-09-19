@@ -81,6 +81,17 @@ USERNAME            IP ADDRESS      STATUS
 
 Make sure you have your [Settings](#Settings) file configured correctly for these to work.
 
+### [vouchers.py](vouchers.py)
+
+A simple script to fetch the next ten unused vouchers, optionally limited to certain voucher groups:
+
+```
+$ python vouchers.py kids
+kids: 112768, 426812, 004408, 551961, 090222, 023504, 657011, 125990, 591588, 650649
+```
+
+If no arguments are provided, then all voucher groups are iterated. Else, only voucher groups that have any of the provided argument strings in their names are listed.
+
 ## Settings
 
 You can store your controller settings in a configuration file to avoid hard-coding them in your scripts.
